@@ -1,11 +1,29 @@
+const moment = require('moment');
 
+const { Op } = require('sequelize'); // Ensure Op is imported from sequelize
 const { Event } = require('../models');
+
+const { getTokens } = require('../services/redisService');
+const { getValidTokens } = require('../services/googleGetValidToken');
 const googleService = require('../services/googleCalendarService');
 
 exports.createEvent = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
-    const eventData = { ...req.body, tenantId };
+    const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
+
+    if (!tenantId) {
+       console.error("Missing Tenant ID in request");
+       return res.status(401).json({ error: 'Unauthorized: No Tenant ID' });
+    }
+	  
+    const eventData = { ...req.body, tenantId, provider: 'google' };
+    
+    const googleToken = await getValidTokens(tenantId);
+
+    if(!googleToken){
+       return res.status(400).json({ error: 'No token found' });
+    }	 
+
     const event = await Event.create(eventData);
     try{
         const gId = await googleService.syncLocalToGoogle(tenantId, event);
@@ -23,9 +41,15 @@ exports.createEvent = async (req, res) => {
 };
 
 exports.getEvents = async (req, res) => {
-  try {
-    const tenantId = req.user.tenantId;
-    const events = await Event.findAll({ where: { tenantId } });
+  try {	  
+    const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
+
+    if (!tenantId) {
+        console.error("Missing Tenant ID in request");
+        return res.status(401).json({ error: 'Unauthorized: No Tenant ID' });
+    }
+
+    const events = await Event.findAll({ where: { tenantId } });	  
     res.json(events);
   } catch (error) {
     console.error(error);
@@ -35,9 +59,15 @@ exports.getEvents = async (req, res) => {
 
 exports.getEventById = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
-    const { id } = req.params;
-    const event = await Event.findOne({ where: { id, tenantId } });
+    const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
+    const { event_id } = req.params;
+
+    if (!tenantId) {
+       console.error("Missing Tenant ID in request");
+       return res.status(401).json({ error: 'Unauthorized: No Tenant ID' });
+    }
+
+    const event = await Event.findOne({ where: { id: event_id, tenantId } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
     res.json(event);
   } catch (error) {
@@ -46,11 +76,54 @@ exports.getEventById = async (req, res) => {
   }
 };
 
+exports.checkConflicts = async (req, res) => {
+  try {
+    const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
+
+    if (!tenantId) {
+        console.error("Missing Tenant ID in request");
+	return res.status(401).json({ error: 'Unauthorized: No Tenant ID' });
+    }
+
+    const { startTime, endTime } = req.query; 
+
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+	return res.status(400).json({ error: 'Invalid date format provided' });
+    }
+
+    const conflicts = await Event.findAll({
+      where: {
+        tenantId,
+        startTime: { [Op.lt]: end },
+        endTime: { [Op.gt]: start }
+      }
+    });
+
+    res.json({
+      hasConflict: conflicts.length > 0,
+      conflicts: conflicts
+    });
+  } catch (error) {
+    console.error('Conflict Check Error:', error);
+    res.status(500).json({ error: 'Failed to check conflicts' });
+  }
+};
+
 exports.updateEvent = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
-    const { id } = req.params;
-    const event = await Event.findOne({ where: { id, tenantId } });
+    const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
+    const { event_id } = req.params;
+
+    const googleToken = await getValidTokens(tenantId);
+
+    if(!googleToken){
+       return res.status(400).json({ error: 'No token found' });
+    }
+	  
+    const event = await Event.findOne({ where: { id:  event_id, tenantId } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     await event.update(req.body);
@@ -69,9 +142,17 @@ exports.updateEvent = async (req, res) => {
 
 exports.deleteEvent = async (req, res) => {
   try {
-    const tenantId = req.user.tenantId;
-    const { id } = req.params;
-    const event = await Event.findOne({ where: { id, tenantId } });
+    const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
+
+    const { event_id } = req.params;
+
+    const googleToken = await getValidTokens(tenantId);
+
+    if(!googleToken){
+       return res.status(400).json({ error: 'No token found' });
+    }
+	  
+    const event = await Event.findOne({ where: { id: event_id, tenantId } });
     if (!event) return res.status(404).json({ error: 'Event not found' });
 
     // Delete Google event first (or concurrently)
@@ -89,7 +170,8 @@ exports.deleteEvent = async (req, res) => {
 
 exports.syncAllEvents = async (req, res) => {
    try {
-     const tenantId = req.user.tenantId; // Derived from your auth middleware
+     const tenantId = req.user?.tenantId || req.headers['x-tenant-id']; // Derived from your auth middleware
+
      const channel = await connectRabbitMQ();
      
      if (!channel) {
@@ -116,7 +198,8 @@ exports.syncAllEvents = async (req, res) => {
 };
 
 exports.disconnectGoogle = async (req, res) => {
-   const tenantId = req.user.tenantId;
+   const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
+
    const channel = await connectRabbitMQ();
 
    // Send the revoke command to the worker

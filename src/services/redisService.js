@@ -26,7 +26,8 @@ client.on('error', (err) => console.error('Redis Client Error', err));
  * @param {object} tokens - The tokens object from Google
  */
 async function storeTokens(tenantId, tokens) {
-   const key = `tenant:${tenantId}:google_tokens`;
+   const accessKey = `tenant:${tenantId}:google_tokens`;
+   const refreshKey = `tenant:${tenantId}:refresh_token`;
    // Google tokens usually contain 'expiry_date' (a timestamp in ms)
    // We set Redis to expire 1 minute before the actual token expires
    // If no expiry provided, default to 1 hour (3600 seconds)
@@ -38,11 +39,14 @@ async function storeTokens(tenantId, tokens) {
    // Use a minimum TTL of 0 to avoid Redis errors
    const safeTTL = Math.max(ttl, 0);
 
-   await client.set(key, JSON.stringify(tokens), {
-      EX: safeTTL
-   });
+   await client.set(accessKey, JSON.stringify(tokens), { EX: safeTTL });
+
+   if (tokens.refresh_token) {
+      // Store for 30 days or longer
+      await client.set(refreshKey, tokens.refresh_token, { EX: 2592000 }); 
+   }
 	    
-   console.log(`Tokens stored in Redis for tenant: ${tenantId} (TTL: ${safeTTL}s)`);
+   console.log(`Tokens stored in Redis for tenant: ${tenantId}. Refresh token saved.`);
 }
 
 /**
@@ -50,6 +54,7 @@ async function storeTokens(tenantId, tokens) {
  */
 async function getTokens(tenantId) {
    const key = `tenant:${tenantId}:google_tokens`;
+   console.log('KKKKKKKKKKEEEEEEEEEEEEEEEEEEEEEEEEEYYYYYYYYYYYYYYYYYY ',key);	
    const data = await client.get(key);
    return data ? JSON.parse(data) : null;
 }

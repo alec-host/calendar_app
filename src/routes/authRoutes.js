@@ -10,7 +10,7 @@ require('dotenv').config();
 
 router.get('/google', (req, res) => {
    try {
-       const tenantId = req.query.tenantId || 'default_tenant';
+       const tenantId = req.query.tenant_id || 'default_tenant';
        const url = getGoogleAuthUrl(tenantId);
 
        res.redirect(url);
@@ -51,8 +51,7 @@ router.get('/oauth2callback', async (req, res) => {
       res.json({ 
           success: true,
 	  jwtToken, 
-	  tenantId    
-	  //tokens 
+	  tenantId  
       });
    } catch (error) {
       if (error.response && error.response.data) {
@@ -62,6 +61,48 @@ router.get('/oauth2callback', async (req, res) => {
       }
 
       res.status(500).json({ error: 'Failed to get Google tokens', details: error.response?.data?.error_description || error.message });
+   }
+});
+
+router.get('/hasGrantToken', async(req, res) => {
+  const tenantId = req.query.tenant_id || 'default_tenant';
+  if(!tenantId) {
+     return res.status(400).json({ error: 'No tenantId provided' });
+  }
+});
+
+router.get('/accessToken', async (req, res) => {
+  const tenantId = req.query.tenant_id;
+
+  if(!tenantId) {
+     return res.status(400).json({ error: 'No tenantId provided' });
+  }
+
+  try {
+     
+      if (!process.env.JWT_SECRET) {
+          throw new Error('JWT_SECRET is not defined in environment variables');
+      }
+
+      const jwtToken = jwt.sign(
+        { provider: 'matterminer', tenantId: tenantId },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      res.json({
+          success: true,
+          jwtToken,
+          tenantId,
+	  status:  'ready',
+          message: `Access token is valid and session is initialized. You may now proceed to the user's original request.`
+      });
+   } catch (error) {
+      if (error.response && error.response.data) {
+          console.error('Access Token Error Response:', error.response.data || error?.message) ;
+      }
+
+      res.status(500).json({ error: 'Failed to get access token', details: error.response?.data?.error_description || error.message });
    }
 });
 

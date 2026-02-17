@@ -15,6 +15,7 @@ const createGoogleClient = (tokens) => {
 
 exports.syncLocalToGoogle = async (tenantId, eventData, googleEventId = null) => {
    const tokens = await getTokens(tenantId);
+   console.log('TTTTTTTTTTTTTTTVVVVVVVVVVVVVVVVVVVVVVVVVVVNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN ', tokens,    tenantId);	
    if (!tokens) return null; // Or handle re-auth logic
 
       const calendar = createGoogleClient(tokens);

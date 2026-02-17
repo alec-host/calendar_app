@@ -10,7 +10,7 @@ router.use('/auth', authRoutes);
 router.use('/webhook',webhookRoutes);
 
 // Placeholder for routes
-router.get('/', (req, res) => {
+router.get('/health', (req,res) => {
   res.json({ message: 'Calendar Service API' });
 });
 

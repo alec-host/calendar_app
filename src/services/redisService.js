@@ -105,5 +105,25 @@ async function getValidTokens(tenantId) {
     }
     return tokens;
 }
+/**
+ * Completely wipes all Google-related tokens for a tenant.
+ * Use this for logout or when Google returns an 'invalid_grant' error.
+ */
+async function revokeTokens(tenantId) {
+    const accessKey = `tenant:${tenantId}:google_tokens`;
+    const refreshKey = `tenant:${tenantId}:refresh_token`;
 
-module.exports = { storeTokens, getTokens, getValidTokens, deleteTokens };
+    try {
+        await Promise.all([
+            client.del(accessKey),
+            client.del(refreshKey)
+        ]);
+        console.log(`Successfully revoked all tokens for tenant: ${tenantId}`);
+        return True;
+    } catch (err) {
+        console.error(`Error revoking tokens for ${tenantId}:`, err);
+        return False;
+    }
+}
+
+module.exports = { storeTokens, getTokens, getValidTokens, deleteTokens, revokeTokens };

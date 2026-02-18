@@ -33,3 +33,4 @@ async function getValidTokens(tenantId) {
     }
     return tokens;
 }
+module.exports = { getValidTokens };

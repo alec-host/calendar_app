@@ -3,14 +3,14 @@ const moment = require('moment');
 const { Op } = require('sequelize'); // Ensure Op is imported from sequelize
 const { Event } = require('../models');
 
-const { getTokens } = require('../services/redisService');
-const { getValidTokens } = require('../services/googleGetValidToken');
+const { getTokens, getValidTokens } = require('../services/redisService');
+
 const googleService = require('../services/googleCalendarService');
 
 exports.createEvent = async (req, res) => {
   try {
     const tenantId = req.user?.tenantId || req.headers['x-tenant-id'];
-
+    
     if (!tenantId) {
        console.error("Missing Tenant ID in request");
        return res.status(401).json({ error: 'Unauthorized: No Tenant ID' });

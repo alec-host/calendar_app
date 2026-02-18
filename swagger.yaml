@@ -142,7 +142,24 @@ paths:
       responses:
         200:
           description: Deleted
-
+  /events/check-conflicts:          
+    get:
+      summary: Check if a time slot is already booked. Always call this endpoint before creating an event. Return true if we have conflict otherwise false.
+      tags: [Events]
+      parameters:
+        - in: query
+          name: startTime
+          required: true
+          schema:
+            type: string
+          required: true
+          name: endTime
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Success
   /events/sync-google:
     post:
       summary: Trigger Google Sync
